@@ -1,0 +1,10 @@
+/.env
+
+# Chroma vector store — regenerable via ingest.py
+chroma_db/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
