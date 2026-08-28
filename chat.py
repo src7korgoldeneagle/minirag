@@ -35,6 +35,8 @@ def load_generation_model():
 
     available_models = google_client.models.list()
     preferred_models = (
+        "gemini-3.6-flash",
+        "gemini-3.6-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
