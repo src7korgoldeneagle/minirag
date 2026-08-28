@@ -16,6 +16,7 @@ st.title("📚 Mini RAG")
 # 2. Load API key (Streamlit secrets first, env var as fallback)
 # ============================================================
 api_key = st.secrets.get("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY"))
+requested_model = st.secrets.get("GEMINI_MODEL", os.getenv("GEMINI_MODEL"))
 if not api_key:
     st.error("GOOGLE_API_KEY not found. Add it in Streamlit's Secrets settings.")
     st.stop()
@@ -26,6 +27,33 @@ if not api_key:
 @st.cache_resource
 def load_google_client():
     return genai.Client(api_key=api_key)
+
+@st.cache_resource
+def load_generation_model():
+    if requested_model:
+        return requested_model
+
+    available_models = google_client.models.list()
+    preferred_models = (
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+    )
+    available_names = {
+        model.name.removeprefix("models/")
+        for model in available_models
+        if "generateContent" in (model.supported_actions or [])
+    }
+
+    for model_name in preferred_models:
+        if model_name in available_names:
+            return model_name
+
+    raise RuntimeError(
+        "No Gemini model available for generateContent. "
+        "Set GEMINI_MODEL to a model enabled for your Google API key."
+    )
 
 @st.cache_resource
 def load_embedding_model():
@@ -54,6 +82,7 @@ def load_collection():
     return collection
 
 google_client = load_google_client()
+generation_model = load_generation_model()
 embedding_model = load_embedding_model()
 collection = load_collection()
 
@@ -105,7 +134,7 @@ QUESTION
 {question}
 """
     response = google_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=generation_model,
         contents=prompt
     )
     return response.text or "I couldn't generate an answer."
