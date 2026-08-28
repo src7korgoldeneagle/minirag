@@ -133,10 +133,13 @@ QUESTION
 ==============================
 {question}
 """
-    response = google_client.models.generate_content(
-        model=generation_model,
-        contents=prompt
-    )
+    try:
+        response = google_client.models.generate_content(
+            model=generation_model,
+            contents=prompt
+        )
+    except genai.errors.APIError as e:
+        raise RuntimeError(f"Gemini API error ({e.code}): {e.message}") from e
     return response.text or "I couldn't generate an answer."
 
 # ============================================================
@@ -159,13 +162,19 @@ if question:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             documents, metadatas = retrieve_documents(question)
-            answer = generate_answer(question, documents, metadatas)
-        st.write(answer)
-        with st.expander("Sources"):
-            for m in metadatas:
-                st.write(f"- {m['source']} (chunk {m['chunk']})")
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer,
-        "sources": metadatas
-    })
+            try:
+                answer = generate_answer(question, documents, metadatas)
+            except RuntimeError as e:
+                st.error(str(e))
+                answer = None
+        if answer is not None:
+            st.write(answer)
+            with st.expander("Sources"):
+                for m in metadatas:
+                    st.write(f"- {m['source']} (chunk {m['chunk']})")
+    if answer is not None:
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "sources": metadatas
+        })
