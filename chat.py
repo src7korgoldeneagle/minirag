@@ -1,8 +1,10 @@
 import os
+from pathlib import Path
 import chromadb
 import streamlit as st
 from sentence_transformers import SentenceTransformer
-from anthropic import Anthropic
+from google import genai
+from ingest import ingest_documents
 
 # ============================================================
 # 1. Page setup
@@ -13,17 +15,17 @@ st.title("📚 Mini RAG")
 # ============================================================
 # 2. Load API key (Streamlit secrets first, env var as fallback)
 # ============================================================
-api_key = st.secrets.get("ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_API_KEY"))
+api_key = st.secrets.get("GOOGLE_API_KEY", os.getenv("GOOGLE_API_KEY"))
 if not api_key:
-    st.error("ANTHROPIC_API_KEY not found. Add it in Streamlit's Secrets settings.")
+    st.error("GOOGLE_API_KEY not found. Add it in Streamlit's Secrets settings.")
     st.stop()
 
 # ============================================================
 # 3. Cache the heavy resources so they load once, not every rerun
 # ============================================================
 @st.cache_resource
-def load_claude_client():
-    return Anthropic(api_key=api_key)
+def load_google_client():
+    return genai.Client(api_key=api_key)
 
 @st.cache_resource
 def load_embedding_model():
@@ -31,10 +33,27 @@ def load_embedding_model():
 
 @st.cache_resource
 def load_collection():
-    chroma_client = chromadb.PersistentClient(path="chroma_db")
-    return chroma_client.get_collection(name="documents")
+    database_path = Path(__file__).resolve().parent / "chroma_db"
+    documents_path = Path(__file__).resolve().parent / "documents"
+    chroma_client = chromadb.PersistentClient(path=str(database_path))
+    collection = chroma_client.get_or_create_collection(name="documents")
 
-claude = load_claude_client()
+    if collection.count() == 0:
+        ingest_documents(
+            folder=str(documents_path),
+            embedding_model=embedding_model,
+            collection=collection
+        )
+
+    if collection.count() == 0:
+        raise RuntimeError(
+            f"No indexed documents found in {documents_path}. "
+            "Add a PDF to documents/ and run ingest.py."
+        )
+
+    return collection
+
+google_client = load_google_client()
 embedding_model = load_embedding_model()
 collection = load_collection()
 
@@ -85,16 +104,11 @@ QUESTION
 ==============================
 {question}
 """
-    response = claude.messages.create(
-        model="claude-sonnet-5",
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}]
+    response = google_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
     )
-    answer = ""
-    for block in response.content:
-        if block.type == "text":
-            answer += block.text
-    return answer
+    return response.text or "I couldn't generate an answer."
 
 # ============================================================
 # 6. Chat UI

@@ -6,33 +6,7 @@ from sentence_transformers import SentenceTransformer
 
 
 # ============================================================
-# 1. Load embedding model
-# ============================================================
-
-print("Loading embedding model...")
-
-embedding_model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
-)
-
-print("Embedding model loaded.")
-
-
-# ============================================================
-# 2. Create ChromaDB
-# ============================================================
-
-chroma_client = chromadb.PersistentClient(
-    path="chroma_db"
-)
-
-collection = chroma_client.get_or_create_collection(
-    name="documents"
-)
-
-
-# ============================================================
-# 3. Extract text from PDF
+# 1. Extract text from PDF
 # ============================================================
 
 def extract_text_from_pdf(pdf_path):
@@ -55,7 +29,7 @@ def extract_text_from_pdf(pdf_path):
 
 
 # ============================================================
-# 4. Create chunks
+# 2. Create chunks
 # ============================================================
 
 def create_chunks(
@@ -88,12 +62,27 @@ def create_chunks(
 
 
 # ============================================================
-# 5. Ingest documents
+# 3. Ingest documents
 # ============================================================
 
-def ingest_documents():
+def ingest_documents(
+    folder="documents",
+    embedding_model=None,
+    collection=None
+):
 
-    folder = "documents"
+    if embedding_model is None:
+        print("Loading embedding model...")
+        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        print("Embedding model loaded.")
+
+    if collection is None:
+        chroma_client = chromadb.PersistentClient(path="chroma_db")
+        collection = chroma_client.get_or_create_collection(name="documents")
+
+    if not os.path.isdir(folder):
+        print(f"Documents folder not found: {folder}")
+        return 0
 
     pdf_files = [
         file
@@ -105,7 +94,7 @@ def ingest_documents():
 
         print("No PDF files found.")
 
-        return
+        return 0
 
     total_chunks = 0
 
@@ -188,11 +177,12 @@ def ingest_documents():
         f"Total chunks: {total_chunks}"
     )
 
+    return total_chunks
+
 
 # ============================================================
 # 6. Run
 # ============================================================
 
 if __name__ == "__main__":
-
     ingest_documents()
